@@ -1,0 +1,2039 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cyber Cat Battle — Album & Lightbox</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{ --header-h:60px; --actions-h:240px }
+body{
+  background:url('./assets/fire-cat/bg.png') center/cover no-repeat,
+             linear-gradient(135deg,#0a0e27 0%,#1a1a2e 50%,#16213e 100%);
+  color:#fff; font-family:Arial, sans-serif; height:100vh; overflow:hidden;
+}
+.battle-container{width:100vw;height:100vh;display:flex;flex-direction:column;background:rgba(0,0,0,.2)}
+.battle-header{height:var(--header-h);background:rgba(0,0,0,.85);padding:10px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #64ffda;flex-shrink:0}
+.turn-info{color:#64ffda;font-size:1.1rem;font-weight:bold}
+.battle-controls{display:flex;gap:10px;flex-wrap:wrap}
+.control-btn{padding:8px 16px;background:rgba(100,255,218,.2);border:1px solid #64ffda;border-radius:20px;color:#64ffda;cursor:pointer;transition:.2s;font-size:.9rem}
+.control-btn:hover{background:rgba(100,255,218,.35);transform:translateY(-2px)}
+.control-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ★ Albumボタンだけ色を強調（ゴールド系） */
+#albumBtn{
+  background: linear-gradient(135deg, #ffd54f, #ff8f00);
+  border-color: #ffca28;
+  color: #1d1200;
+  box-shadow: 0 0 0 2px rgba(255, 213, 79, .25) inset;
+}
+#albumBtn:hover{
+  background: linear-gradient(135deg, #ffe082, #ff6f00);
+}
+#albumBtn:disabled{
+  /* 解放前でも他より目立つ色味を維持しつつ控えめに */
+  background: linear-gradient(135deg, #8a7440, #8a5a1f);
+  border-color: #a6873a;
+  color: #e6e0d5;
+  opacity: .65; /* 既存の :disabled と整合 */
+}
+
+
+.battlefield{flex:1;display:grid;grid-template-columns:1fr 1fr;position:relative;min-height:0}
+.battlefield::before{content:'';position:absolute;inset:0 auto 0 50%;width:2px;background:linear-gradient(to bottom,transparent,#64ffda,transparent);z-index:1}
+.player-side,.enemy-side{display:flex;flex-direction:column;justify-content:center;align-items:center;padding:20px}
+.enemy-side{background:linear-gradient(135deg,rgba(255,107,107,.10),rgba(238,90,36,.05))}
+.player-side{background:linear-gradient(135deg,rgba(100,255,218,.10),rgba(69,183,209,.05))}
+.character-name{font-size:1.1rem;font-weight:bold;color:#ccd6f6;margin-bottom:6px}
+.enemy-meta{display:flex;gap:8px;align-items:center;margin-bottom:8px;color:#ffd37a;font-weight:bold}
+.enemy-level{padding:2px 8px;border:1px solid #ffd37a;border-radius:999px;font-size:.85rem}
+.enemy-atk{font-size:.85rem;opacity:.9}
+.character-sprite{width:180px;height:180px;border-radius:20px;border:3px solid #64ffda;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:4rem;margin-bottom:15px;transition:.5s;overflow:hidden;position:relative}
+.character-sprite img,.character-sprite video{width:100%;height:100%;object-fit:cover;border-radius:15px}
+.icon-frame{position:absolute;inset:0;z-index:10;pointer-events:none}
+
+.hp-bar-container{width:240px;margin-bottom:10px}
+.hp-bar{width:100%;height:18px;background:rgba(0,0,0,.5);border-radius:10px;overflow:hidden;border:2px solid #64ffda}
+.hp-fill{height:100%;background:linear-gradient(90deg,#00ff88,#64ffda);transition:width .8s ease,background .3s ease}
+.hp-fill.yellow{background:linear-gradient(90deg,#ffaa00,#ffdd00)}
+.hp-fill.red{background:linear-gradient(90deg,#ff4444,#ff6666)}
+.hp-text{text-align:center;margin-top:5px;color:#ccd6f6;font-size:.9rem}
+
+/* フッター：ボタン群＆ログ */
+.battle-actions{height:var(--actions-h);background:rgba(0,0,0,.92);border-top:2px solid #64ffda;display:grid;grid-template-columns:2fr 1fr;gap:10px;padding:10px;flex-shrink:0}
+@media (max-height:900px){ :root{ --actions-h:200px } .character-sprite{width:165px;height:165px}}
+@media (max-height:820px){ :root{ --actions-h:180px } .character-sprite{width:155px;height:155px}}
+@media (max-height:700px){ :root{ --actions-h:160px } .character-sprite{width:145px;height:145px}}
+.action-buttons{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, 1fr); /* ← 4 → 3 に修正 */
+  gap: 6px;
+  height: 100%;
+  align-content: stretch;
+  align-items: stretch;
+}
+.action-btn{
+  background:url('./assets/ui/cmd-bg.png') center/cover no-repeat,
+             linear-gradient(135deg,#667eea,#764ba2);
+  border:2px solid #64ffda;border-radius:10px;color:#fff;cursor:pointer;transition:.2s;font-weight:bold;font-size:.9rem;
+  display:flex;align-items:center;justify-content:center;gap:10px;position:relative;padding:8px;min-height:60px
+}
+.action-btn::before{content:'';position:absolute;inset:0;background:rgba(0,0,0,.25);border-radius:8px;z-index:1}
+.action-icon,.action-text{position:relative;z-index:2}
+.action-icon{width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;border:1px solid rgba(255,255,255,.3)}
+.action-icon img{width:100%;height:100%;object-fit:contain}
+.action-text{display:flex;flex-direction:column;gap:2px;text-align:center}
+.action-title{font-size:1rem;font-weight:bold}
+.action-cost{font-size:.8rem;opacity:.8}
+.action-btn:disabled{
+  opacity:.5;cursor:not-allowed;
+  background:url('./assets/ui/cmd-bg.png') center/cover no-repeat,
+             linear-gradient(135deg,#555,#666);
+}
+.action-btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(100,255,218,.28)}
+
+.battle-info{
+  display: grid !important;
+  grid-template-rows: auto 1fr;
+  gap: 6px;       /* ← 左のボタン群と合わせて 6px に統一 */
+  min-height: 0;
+}
+.energy-bar{background:rgba(100,255,218,.12);border:2px solid #64ffda;border-radius:10px;padding:12px}
+.energy-title{color:#64ffda;font-weight:bold;margin-bottom:8px;font-size:.9rem}
+.energy-orbs{display:flex;gap:4px}
+.energy-orb{width:18px;height:18px;border-radius:50%;border:2px solid #64ffda;background:transparent;transition:.2s}
+.energy-orb.filled{background:#64ffda;box-shadow:0 0 8px rgba(100,255,218,.5)}
+/* ログ枠は中央寄せのまま（必要なら残す） */
+.battle-log{
+  /* ★ 枠と背景を復活させつつ中央寄せも維持 */
+  background: rgba(100,255,218,.06);
+  border: 1px solid rgba(100,255,218,.35);
+  border-radius: 10px;
+  padding: 12px;
+
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+  min-height: 0;
+}
+.log-text{
+  margin: 0;
+  text-align: center;
+}
+
+/* 中央オーバーレイ（演出用） */
+.media-overlay{
+  position:fixed;left:50%;top:50%;width:400px;height:400px;
+  transform:translate(-50%,-50%);pointer-events:none;z-index:1000;opacity:0;transition:opacity .25s ease;
+}
+.media-overlay.show{opacity:1}
+.media-overlay img,.media-overlay video{width:100%;height:100%;object-fit:contain}
+.media-content{position:relative;width:100%;height:100%}
+.media-frame{position:absolute;inset:0;z-index:10;pointer-events:none}
+
+/* アルバムモーダル */
+.album-modal{
+  position:fixed;left:0;top:var(--header-h);width:100vw;height:calc(100vh - var(--header-h));
+  background:rgba(0,0,0,.96);border-top:2px solid #64ffda;z-index:2000;display:none;overflow:auto;padding:14px;
+}
+.album-header{display:flex;justify-content:space-between;align-items:center;color:#64ffda;font-weight:bold;margin-bottom:10px}
+.album-close{padding:6px 10px;border:1px solid #64ffda;background:transparent;color:#64ffda;border-radius:8px;cursor:pointer}
+.album-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.album-section{grid-column:1/-1;margin:6px 0 2px;color:#64ffda;font-weight:bold}
+.album-card{background:rgba(100,255,218,.08);border:1px solid rgba(100,255,218,.3);border-radius:10px;padding:8px}
+.album-thumb{width:100%;aspect-ratio:1/1;background:#000;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.album-thumb img,.album-thumb video{width:100%;height:100%;object-fit:contain}
+.album-caption{margin-top:6px;font-size:.85rem;color:#a8b2d1;text-align:center}
+
+/* Lightbox（拡大閲覧） */
+.lightbox{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.86); z-index:3000; }
+.lightbox.show{ display:flex; }
+.lightbox-content{ position:relative; max-width:92vw; max-height:92vh; }
+.lightbox-content img,.lightbox-content video{ width:100%; height:100%; object-fit:contain; max-height:86vh; }
+.lightbox-caption{ margin-top:8px; text-align:center; color:#a8b2d1; font-size:.9rem; }
+.lightbox-close{ position:absolute; top:-40px; right:0; padding:6px 10px; border:1px solid #64ffda; background:rgba(0,0,0,.6); color:#64ffda; border-radius:8px; cursor:pointer; }
+
+/* 装飾 */
+#buffEmoji{margin-left:8px;font-size:1.05rem;vertical-align:middle;filter:drop-shadow(0 0 2px rgba(100,255,218,.4))}
+.prism{background:linear-gradient(135deg,#ff6b6b,#4ecdc4,#45b7d1,#96ceb4);background-size:400% 400%;animation:gradientShift 3s ease-in-out infinite}
+.shadow{background:linear-gradient(135deg,#6c5ce7,#a29bfe)}
+@keyframes gradientShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+/* 敗北したキャラの見た目（クリック不可・グレー） */
+.character-option.is-defeated{
+  opacity:.45;
+  filter:grayscale(100%);
+  pointer-events:none;
+}
+
+/* ==== 右下メッセージ（ログ）位置＆見切れ修正 ==== */
+
+/* 右カラムをgridにして「上：エナジー」「下：ログ」で自動配分。
+   min-height:0 を入れることで高さが足りない環境でも見切れない。 */
+.battle-info{
+  display: grid !important;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  min-height: 0;           /* ★重要：子要素のオーバーフロー防止 */
+}
+
+/* ログ枠：常に中央寄せ・見切れ防止 */
+.battle-log{
+  display: flex !important;
+  align-items: center;     /* 垂直中央 */
+  justify-content: center; /* 水平中央（テキストを真ん中に） */
+  overflow: hidden;        /* はみ出し防止 */
+  min-height: 0;           /* ★重要：親grid内での縮み許可 */
+}
+
+/* テキストは中央寄せに */
+.log-text{
+  margin: 0;
+  text-align: center;
+}
+/* ===== Mobile-first overrides ===== */
+
+
+/* さらに狭い端末（横幅 420px 未満）の最終調整 */
+@media (max-width: 420px) {
+  .action-buttons { gap: 6px; }
+  .action-btn { min-height: 58px; padding: 8px; }
+  .action-icon { width: 32px; height: 32px; }
+  .hp-bar-container { width: 90vw; }
+}
+/* ===== Phone portrait first (優先: 縦持ち) ===== */
+
+/* さらに狭い端末（~375px）の“極小”調整 */
+@media (max-width: 375px) and (orientation: portrait) {
+  .action-buttons { gap: 5px; grid-template-rows: repeat(3, minmax(40px,1fr)); }
+  .action-btn { min-height: 40px; padding: 4px; font-size: .74rem; }
+  .action-icon { width: 22px; height: 22px; }
+  .character-sprite { width: 128px; height: 128px; }
+  .hp-bar-container { width: 94vw; }
+}
+/* ===== Phone portrait first (優先: 縦持ち) ===== */
+/* ===== 最小限UI：縦持ちスマホ用 ===== */
+/* ===== スマホ縦：ボタンはアイコンのみ ===== */
+@media (max-width: 768px) and (orientation: portrait) {
+  /* グリッドは 3列×2行（省スペース） or 2列×3行どちらでもOK。ここでは 3×2 にします */
+  .action-buttons {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, minmax(44px, 1fr));
+    gap: 6px;
+  }
+
+  /* ボタンは正方形＆センター寄せ、テキストは非表示 */
+  .action-btn {
+    min-height: 44px;
+    aspect-ratio: 1 / 1;         /* 正方形 */
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    font-size: 0;                /* 文字の高さ分のズレ防止 */
+  }
+
+  .action-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 0;                /* 絵文字用のフォントサイズ無効化 */
+    border: none;                /* 余計な枠を消す（必要なら残してOK） */
+    background: transparent;
+  }
+  .action-icon img { width: 100%; height: 100%; object-fit: contain; }
+
+  /* テキストはDOMに残すが画面では非表示（音声読み上げは aria-label で担保） */
+  .action-text { 
+    position: absolute !important;
+    width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+}
+/* ===== 縦持ち：HPバーを短く＆細く ===== */
+@media (max-width: 768px) and (orientation: portrait) {
+  /* プレイヤー/敵ともHPバーの横幅をさらに短く */
+  .hp-bar-container {
+    width: min(64vw, 260px);   /* ← 以前より短く */
+    margin: 2px auto 6px;
+  }
+  .hp-bar {
+    height: 8px;               /* ← 細く */
+    border-width: 1px;         /* 枠線も細く */
+  }
+  .hp-text {
+    font-size: .72rem;         /* 数字も少し小さく */
+  }
+}
+/* ===== 横向き：下1行にUIをまとめる ===== */
+@media (orientation: landscape) and (max-width: 1024px) {
+  html, body { height: 100svh; overflow: hidden; }
+  .battle-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 戦場を最大化（上下にしかない構成にする） */
+  .battlefield {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 8px;
+  }
+  .character-sprite {
+    width: min(40vw, 240px);
+    height: min(40vw, 240px);
+  }
+  .hp-bar-container {
+    width: 140px;
+    margin: 4px auto;
+  }
+  .hp-bar { height: 8px; }
+  .hp-text { font-size: 0.7rem; }
+
+  /* 下段のUIを1行にまとめる */
+  .battle-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 4px 6px;
+    background: rgba(0,0,0,.9);
+    height: 52px;
+  }
+
+  /* コマンドアイコンを横一列 */
+  .action-buttons {
+    display: flex;
+    gap: 6px;
+  }
+  .action-btn {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+  }
+  .action-icon {
+    width: 24px;
+    height: 24px;
+  }
+  .action-text { display: none; } /* テキストは非表示 */
+
+  /* エナジーを横並びで小さく */
+  .energy-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+  .energy-title {
+    font-size: 0.65rem;
+    color: #64ffda;
+  }
+  .energy-orbs {
+    display: flex;
+    gap: 3px;
+  }
+  .energy-orb {
+    width: 10px;
+    height: 10px;
+    border: 1px solid #64ffda;
+  }
+  .energy-orb.filled { background: #64ffda; }
+
+  /* ログを右端に */
+  .battle-log {
+    flex: 1;
+    min-height: auto;
+    padding: 0 6px;
+    font-size: 0.65rem;
+    color: #a8b2d1;
+    text-align: right;
+    background: transparent;
+    border: none;
+  }
+  .log-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 演出は中央大きく */
+  .media-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .media-overlay img, .media-overlay video {
+    max-width: 80%;
+    max-height: 80%;
+    object-fit: contain;
+  }
+}
+/* ===== Landscape: 戦場最大化 ＆ 下1行に圧縮 ===== */
+@media (orientation: landscape) and (max-width: 1024px) {
+
+  html, body { height: 100svh; overflow: hidden; }
+  .battle-container { height: 100svh; display: flex; flex-direction: column; }
+
+  /* 上＝戦場を最大、下＝UIバーを最小 */
+  .battlefield {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 6px 10px 2px;
+    gap: 10px;
+  }
+  .battlefield::before { opacity: .5; } /* 仕切りは薄め（任意） */
+
+  /* —— キャラ：小さめ＋余白あり —— */
+  .character-name { font-size: .9rem; margin-bottom: 2px; }
+  .enemy-meta { gap: 6px; margin: 0 0 4px; transform: translateY(-2px); }
+  .character-sprite {
+    width: min(32vw, 180px);   /* 小さく */
+    height: min(32vw, 180px);
+    margin: 4px 0 6px;         /* 余裕を感じる最小限の間隔 */
+  }
+  .hp-bar-container { width: 130px; margin: 2px auto 6px; }
+  .hp-bar { height: 8px; }
+  .hp-text { font-size: .72rem; }
+
+  /* —— 下部UIバー：1行・最小 —— */
+  .battle-actions {
+    flex: 0 0 auto;
+    height: 46px;                 /* さらに低く */
+    padding: 4px 6px;
+    background: rgba(0,0,0,.92);
+    display: grid;
+    grid-template-columns: auto auto 1fr; /* [コマンド][エナジー][ログ] */
+    align-items: center;
+    gap: 6px;
+    border-top: 1px solid rgba(100,255,218,.35);
+  }
+
+  /* コマンド：アイコンのみ・極小 */
+  .action-buttons {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .action-btn {
+    width: 36px; height: 36px;   /* さらに小さく */
+    padding: 0; border-radius: 6px;
+    display: grid; place-items: center;
+  }
+  .action-icon { width: 22px; height: 22px; }
+  .action-text { display: none !important; }
+
+  /* エナジー：水平・極小 */
+  .battle-info { display: contents; } /* 中身を直列配置 */
+  .energy-bar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 0; background: transparent; border: none;
+  }
+  .energy-title { font-size: .65rem; color:#64ffda; }
+  .energy-orbs { display: flex; gap: 3px; }
+  .energy-orb { width: 9px; height: 9px; border:1px solid #64ffda; }
+  .energy-orb.filled { background:#64ffda; }
+
+  /* ログ：右端1行のみ・超小さく */
+  .battle-log {
+    justify-content: flex-end;
+    background: transparent; border: none;
+    min-height: auto; padding: 0 4px;
+  }
+  .log-text {
+    font-size: .62rem; color:#a8b2d1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* 演出オーバーレイ：中央最大、バーには被せない高さ */
+  .media-overlay {
+    position: fixed; left: 50%; top: calc(50% - 12px);
+    transform: translate(-50%,-50%);
+    width: 72%; max-height: 78%;
+    pointer-events: none; z-index: 900;
+  }
+  .media-overlay img, .media-overlay video {
+    width: 100%; height: auto; max-height: 78%; object-fit: contain;
+  }
+}
+/* ===== Landscape: キャラ縮小・コマンド正方形化 ===== */
+@media (orientation: landscape) and (max-width: 1024px) {
+
+  /* 戦場エリア */
+  .battlefield {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    justify-items: center;
+    padding: 4px 6px 0;
+    gap: 6px;
+  }
+
+  /* キャラ画像をさらに小さく中央に */
+  .character-sprite {
+    width: min(28vw, 140px);
+    height: min(28vw, 140px);
+    margin: 2px 0;
+  }
+
+  /* キャラ名やメタ情報を小さく */
+  .character-name { font-size: 0.75rem; margin-bottom: 2px; }
+  .enemy-meta { gap: 4px; margin: 0 0 2px; }
+  .enemy-level { font-size: 0.65rem; padding: 1px 4px; }
+  #playerCharacterName { font-size: 0.75rem; }
+  #buffEmoji { font-size: 0.8rem; }
+
+  /* HPバーを短く＆細く */
+  .hp-bar-container { width: 110px; margin: 2px auto; }
+  .hp-bar { height: 6px; }
+  .hp-text { font-size: 0.65rem; }
+
+  /* 下のUIバー */
+  .battle-actions {
+    flex: 0 0 auto;
+    height: 50px;                /* 高さを固定して隙間を潰す */
+    padding: 0 6px;
+    background: rgba(0,0,0,.95);
+    display: grid;
+    grid-template-columns: auto auto 1fr; /* [コマンド][エナジー][ログ] */
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* コマンドを正方形アイコンだけに */
+  .action-buttons {
+    display: flex; gap: 6px;
+  }
+  .action-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+  }
+  .action-icon { width: 22px; height: 22px; }
+  .action-text { display: none !important; }
+
+  /* エナジー小さく */
+  .energy-bar { display: flex; align-items: center; gap: 3px; padding: 0; }
+  .energy-title { font-size: 0.6rem; }
+  .energy-orbs { gap: 2px; }
+  .energy-orb { width: 8px; height: 8px; }
+
+  /* ログ最小化 */
+  .battle-log { min-height: auto; padding: 0 4px; }
+  .log-text {
+    font-size: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+/* ===== Landscape fix: 小型化 & 1行バー ===== */
+@media (orientation: landscape) and (max-width: 1024px) {
+
+  html, body { height: 100svh; overflow: hidden; }
+  .battle-container { height: 100svh; display: flex; flex-direction: column; }
+
+  /* 戦場：キャラさらに小さく・中央に余裕 */
+  .battlefield{
+    flex:1 1 auto;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    align-items:center; justify-items:center;
+    padding:4px 8px 0; gap:6px;
+  }
+  .character-name{ font-size:.7rem; margin-bottom:2px; }
+  .enemy-meta{ gap:4px; margin:0 0 2px; }
+  .enemy-level{ font-size:.62rem; padding:1px 4px; }
+  #playerCharacterName{ font-size:.7rem }
+  #buffEmoji{ font-size:.75rem }
+
+  /* → アイコンもっと小さく */
+  .character-sprite{
+    width:min(24vw, 120px);
+    height:min(24vw, 120px);
+    margin:2px 0;
+  }
+  .hp-bar-container{ width:96px; margin:2px auto }
+  .hp-bar{ height:6px }
+  .hp-text{ font-size:.6rem }
+
+  /* 下のバー：背景が覗かないよう高さ固定＆詰める */
+  .battle-actions{
+    flex:0 0 auto;
+    height:44px;                      /* ← 低く固定 */
+    padding:0 6px;                     /* ← 余白最小 */
+    background:rgba(0,0,0,.96);
+    display:grid;
+    grid-template-columns:auto 1fr;    /* [コマンド] [エナジー+ログ] */
+    align-items:center; gap:6px;
+    border-top:1px solid rgba(100,255,218,.35);
+  }
+
+  /* コマンド：正方形＆アイコンのみ */
+  .action-buttons{ display:flex; gap:6px; flex-wrap:nowrap; align-items:center; }
+  .action-btn{
+    width:34px; height:34px;          /* ← 正方形 */
+    padding:0; border-radius:6px;
+    display:grid; place-items:center;
+  }
+  .action-icon{ width:20px; height:20px }
+  .action-text{ display:none !important }   /* テキスト消し */
+
+  /* 右側の情報は一列で「エナジー→ログ」 */
+  .battle-info{
+    display:flex; align-items:center; gap:8px; justify-content:space-between;
+    min-width:0;                       /* 省スペースで折れないように */
+  }
+  .energy-bar{
+    display:flex; align-items:center; gap:4px;
+    padding:0; background:transparent; border:none;
+  }
+  .energy-title{ font-size:.6rem; color:#64ffda }
+  .energy-orbs{ display:flex; gap:2px }
+  .energy-orb{ width:8px; height:8px; border:1px solid #64ffda }
+  .energy-orb.filled{ background:#64ffda }
+
+  /* ログはエナジーの横・1行極小 */
+  .battle-log{
+    flex:1; min-height:auto; padding:0 4px; background:transparent; border:none;
+    display:flex; align-items:center; justify-content:flex-end;
+  }
+  .log-text{
+    font-size:.6rem; color:#a8b2d1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* 演出は中央（下バーに被らない） */
+  .media-overlay{
+    position:fixed; left:50%; top:calc(50% - 10px);
+    transform:translate(-50%,-50%); width:68%; max-height:78%;
+    pointer-events:none; z-index:900;
+  }
+  .media-overlay img, .media-overlay video{ width:100%; height:auto; max-height:78%; object-fit:contain }
+}
+/* === Overlay: 画像・動画・カットインを完全中央に === */
+.media-overlay{
+  position:fixed !important;
+  left:50% !important; top:50% !important;
+  transform:translate(-50%,-50%) !important;
+  width:min(68vw, 760px); max-height:78vh;
+  pointer-events:none; z-index:900; opacity:1;
+  display:flex; align-items:center; justify-content:center;
+}
+.media-overlay .media-content{ 
+  width:100%; height:auto; max-height:78vh;
+  display:flex; align-items:center; justify-content:center;
+}
+.media-overlay img,
+.media-overlay video{
+  max-width:100%; max-height:78vh; object-fit:contain; display:block;
+}
+/* もし枠画像（frame）を重ねる場合も中央に一致させる */
+.media-overlay .media-frame{
+  position:absolute; left:50%; top:50%;
+  transform:translate(-50%,-50%);
+  max-width:100%; max-height:100%; object-fit:contain; pointer-events:none;
+}
+/* === Landscape: 戦場最大化 & 下1行バー === */
+@media (orientation: landscape) and (max-width: 1024px){
+
+  html,body{height:100svh; overflow:hidden;}
+  .battle-container{height:100svh; display:flex; flex-direction:column;}
+
+  /* 戦場：キャラさらに小さく＆中央に余裕 */
+  .battlefield{
+    flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr;
+    align-items:center; justify-items:center;
+    padding:4px 8px 0; gap:6px;
+  }
+  .character-name{font-size:.7rem; margin-bottom:2px;}
+  .enemy-meta{gap:4px; margin:0 0 2px;}
+  .enemy-level{font-size:.62rem; padding:1px 4px;}
+  #playerCharacterName{font-size:.7rem} #buffEmoji{font-size:.72rem}
+
+  .character-sprite{ width:min(22vw, 110px); height:min(22vw,110px); margin:2px 0;}
+  .hp-bar-container{width:92px; margin:2px auto;}
+  .hp-bar{height:6px} .hp-text{font-size:.58rem}
+
+  /* 下のバー：隙間ゼロ＆[コマンド][エナジー+ログ]を同一行 */
+  .battle-actions{
+    flex:0 0 auto; height:42px; padding:0 6px;
+    background:rgba(0,0,0,.98);
+    display:grid; grid-template-columns:auto 1fr;
+    align-items:center; gap:6px; border-top:1px solid rgba(100,255,218,.35);
+  }
+
+  /* コマンド：必ず正方形 */
+  .action-buttons{display:flex; gap:6px; align-items:center; flex-wrap:nowrap;}
+  .action-btn{
+    box-sizing:border-box;
+    aspect-ratio:1/1;           /* ← 正方形を強制 */
+    width:32px; min-width:32px; height:auto;
+    padding:0; border-radius:6px; display:grid; place-items:center;
+  }
+  .action-icon{width:20px; height:20px;}
+  .action-text{display:none !important;}
+
+  /* 右側＝エナジー＋ログを横並び・詰める */
+  .battle-info{ display:flex; align-items:center; gap:8px; flex-wrap:nowrap; min-width:0; }
+  .energy-bar{
+    display:flex; align-items:center; gap:4px; padding:0;
+    background:transparent; border:none; flex:0 0 auto;
+  }
+  .energy-title{font-size:.58rem; color:#64ffda;}
+  .energy-orbs{display:flex; gap:2px;} .energy-orb{width:8px; height:8px; border:1px solid #64ffda;}
+  .energy-orb.filled{background:#64ffda;}
+
+  /* ログは同一行に収め、落ちそうならさらに圧縮 */
+  .battle-log{
+    flex:1 1 auto; min-height:auto; padding:0 4px;
+    background:transparent; border:none; display:flex; align-items:center; justify-content:flex-end;
+  }
+  .log-text{ font-size:.58rem; color:#a8b2d1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* さらに狭い横幅(<=812px)は超圧縮して落ちないように */
+  @media (max-width: 812px){
+    .action-btn{ width:30px; min-width:30px; }
+    .action-icon{ width:18px; height:18px;}
+    .energy-title{font-size:.52rem;}
+    .energy-orb{width:7px; height:7px;}
+    .log-text{font-size:.54rem;}
+    .battle-actions{ height:40px; }
+  }
+}
+/* ===== Landscape 最終調整：正方形ボタン/最下部固定/ログ右端 ===== */
+@media (orientation: landscape) and (max-width: 1024px) {
+
+  /* 戦場側は下の固定バーぶんだけ余白を確保（重なり防止） */
+  .battle-container { 
+    padding-bottom: calc(46px + env(safe-area-inset-bottom));
+  }
+
+  /* ---- コマンドバー：画面最下部に固定＆背景の覗きゼロ ---- */
+  .battle-actions {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: 46px;                                  /* バーの高さ */
+    padding: 0 8px calc(env(safe-area-inset-bottom));
+    background: rgba(0,0,0,0.98);                  /* 不透明で覗き防止 */
+    display: grid;
+    grid-template-columns: auto 1fr;               /* [コマンド] [エナジー+ログ] */
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid rgba(100,255,218,.35);
+    z-index: 50;
+  }
+
+  /* ---- コマンドグループ：縦長の枠/余白を無効化して正方形に揃える ---- */
+  /* 親に高さがあると子が引っ張られるので、明示的に高さを決める */
+  .action-buttons {
+    height: 34px;                                  /* アイコン枠の高さ = 正方形サイズ */
+    display: flex; align-items: center; gap: 6px;
+    padding: 0; margin: 0;
+    background: transparent !important;
+    border: none !important; box-shadow: none !important;
+  }
+
+  /* 各ボタンを“正方形”で固定。外枠のパディングを0に */
+  .action-btn {
+    height: 100%;                                  /* ← 親の 34px に合わせる */
+    aspect-ratio: 1 / 1;                           /* ← 正方形を強制 */
+    width: auto; min-width: 34px;                  /* Safari対策で幅の下限も指定 */
+    padding: 0; border-radius: 6px;
+    display: grid; place-items: center;
+    box-sizing: border-box;
+    background-clip: padding-box;
+  }
+  .action-text { display: none !important; }       /* テキストは非表示 */
+  .action-icon { width: 20px; height: 20px; }
+  .action-icon img { width: 100%; height: 100%; object-fit: contain; }
+
+  /* ---- 右カラム：エナジー＋ログを同じ行に。ログは右端1行・枠無し ---- */
+  .battle-info { 
+    display: flex; align-items: center; gap: 10px; 
+    min-width: 0; /* 右端での折返し抑制 */
+  }
+
+  .energy-bar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 0; background: transparent !important;
+    border: none !important; box-shadow: none !important;
+    flex: 0 0 auto;
+  }
+  .energy-title { font-size: .6rem; color: #64ffda; }
+  .energy-orbs { display: flex; gap: 2px; }
+  .energy-orb { width: 8px; height: 8px; border: 1px solid #64ffda; }
+  .energy-orb.filled { background: #64ffda; }
+
+  /* ログは枠を外して右端1行にピタッと配置 */
+  .battle-log {
+    flex: 1 1 auto;
+    min-height: auto; padding: 0;
+    background: transparent !important;
+    border: none !important; box-shadow: none !important;
+    display: flex; align-items: center; justify-content: flex-end;
+  }
+  .log-text {
+    font-size: .6rem; color: #a8b2d1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ---- 戦場：キャラクターをさらに小さく中央に余裕 ---- */
+  .battlefield {
+    padding: 6px 10px 0; gap: 8px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center; justify-items: center;
+  }
+  .character-name { font-size: .7rem; margin-bottom: 2px; }
+  .enemy-meta { gap: 4px; margin: 0 0 2px; }
+  .enemy-level { font-size: .62rem; padding: 1px 4px; }
+  #playerCharacterName { font-size: .7rem; } 
+  #buffEmoji { font-size: .7rem; }
+
+  .character-sprite {
+    width: min(20vw, 100px);
+    height: min(20vw, 100px);
+    margin: 2px 0;
+  }
+  .hp-bar-container { width: 90px; margin: 2px auto; }
+  .hp-bar { height: 6px; }
+  .hp-text { font-size: .58rem; }
+}
+
+/* さらに狭い横幅(<=812px)ではアイコンを32px角まで圧縮 */
+@media (orientation: landscape) and (max-width: 812px) {
+  .action-buttons { height: 32px; gap: 5px; }
+  .action-btn { min-width: 32px; }
+  .action-icon { width: 18px; height: 18px; }
+  .battle-actions { height: 42px; }
+}
+/* === コマンドアイコン枠をさらに小さく === */
+.action-buttons {
+  height: 30px;                /* 小型化 */
+  padding: 0; margin: 0;
+  display: flex; gap: 4px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.action-btn {
+  height: 100%;
+  aspect-ratio: 1 / 1;          /* 正方形を強制 */
+  width: auto; min-width: 30px; /* Safari対策 */
+  padding: 0;
+  border-radius: 4px;
+  display: grid; place-items: center;
+  background: transparent !important;
+  border: 1px solid rgba(100,255,218,.5); /* 枠も細く */
+}
+
+.action-icon {
+  width: 18px; height: 18px;
+}
+.action-text { display: none !important; }
+
+/* === バトルログは右端1行、余白を除去 === */
+.battle-log {
+  flex: 1 1 auto;
+  min-height: auto;
+  padding: 0 2px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.log-text {
+  font-size: .58rem;
+  color: #a8b2d1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* === カットイン演出中はコマンドを非表示に === */
+.media-overlay.active ~ .battle-actions .action-buttons {
+  display: none !important;
+}
+/* === コマンド：正方形＆最下部に密着 === */
+:root{
+  --commands-h: 96px; /* 必要に応じて90〜110で微調整 */
+}
+.battle-actions{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: var(--commands-h);
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: end;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+  background: #02060a; /* 黒帯 */
+  z-index: 500;
+}
+
+/* コマンドボタン：正方形化 */
+.action-buttons{
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0,1fr));
+  gap: 8px;
+  align-items: end;
+}
+.action-btn{
+  aspect-ratio: 1 / 1;       /* ★正方形に固定 */
+  min-height: 0;             /* 高さはアスペクトで決定 */
+  padding: 6px;              /* 余白は最小限 */
+  border-radius: 12px;
+}
+.action-btn .action-icon{    /* アイコン画像を内フィット */
+  width: 100%; height: 100%;
+}
+
+/* エナジー＆ログを1行にまとめて右へ詰める */
+.energy-and-log{
+  display:flex; align-items:center; justify-content:flex-end;
+  gap: 12px; margin-top: 6px;
+}
+.energy-bar{ margin: 0; padding: 6px 10px; }
+.energy-title{ font-size: 12px; margin: 0 6px 0 0; }
+.energy-orbs{ gap: 6px; }
+.energy-orb{ width: 12px; height: 12px; }
+
+/* バトルログ：枠は外して右端に小さく表示 */
+.battle-log{
+  background: transparent; box-shadow: none; border: 0;
+  padding: 0; margin: 0;
+}
+.battle-log .log-text{
+  font-size: 12px; line-height: 1.2; opacity: .9;
+  white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+  max-width: 42vw;          /* 必要なら幅調整 */
+}
+/* ===== 下部バー：最下部固定＆1行に収める ===== */
+.battle-actions{
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 44px;
+  padding: 0 10px calc(env(safe-area-inset-bottom));
+  background: rgba(0,0,0,.98);
+  display: grid;
+  grid-template-columns: auto 1fr;   /* [ボタン列] [エナジー+ログ] */
+  align-items: center; gap: 10px;
+  z-index: 50;
+}
+
+/* ===== ボタン列：一直線に“単純に並べるだけ” ===== */
+.action-buttons{
+  display: flex !important;
+  align-items: center;
+  justify-content: center;           /* 中央寄せ。左寄せにしたいなら flex-start */
+  gap: 8px;
+  width: 100%;
+  height: 32px;                      /* 行の高さ＝ボタンの高さ */
+  padding: 0; margin: 0;
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+
+/* 各ボタンのリセット（バラけ防止） */
+.action-btn{
+  position: static !important;       /* 既存の absolute/relative 無効化 */
+  inset: auto !important;
+  transform: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  height: 100%;                      /* 親の32pxに合わせる */
+  aspect-ratio: 1/1;                 /* 正方形を強制 */
+  width: auto; min-width: 32px;      /* Safari対策 */
+  border-radius: 6px;
+  display: grid; place-items: center;
+  box-sizing: border-box;
+}
+.action-text{ display: none !important; }
+.action-icon{ width: 20px; height: 20px; }
+.action-icon img{ width: 100%; height: 100%; object-fit: contain; }
+
+/* ===== 右側：エナジー＋ログを同じ行に（落ちない＆詰める） ===== */
+.battle-info{
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;                      /* ログが折り返さないように */
+}
+.energy-bar{
+  display: flex; align-items: center; gap: 4px;
+  padding: 0; background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+.energy-title{ font-size: .6rem; color:#64ffda; }
+.energy-orbs{ display: flex; gap: 2px; }
+.energy-orb{ width: 8px; height: 8px; border: 1px solid #64ffda; }
+.energy-orb.filled{ background:#64ffda; }
+
+.battle-log{
+  flex: 1 1 auto; min-height: auto; padding: 0;
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  display: flex; align-items: center; justify-content: flex-end;
+}
+.log-text{
+  font-size: .58rem; color:#a8b2d1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 40vw;                   /* 必要に応じて圧縮幅を調整 */
+}
+
+/* エナジーのタイトルとドットをくっきり表示 */
+.energy-bar,
+.energy-bar * {
+  opacity: 1 !important;
+}
+
+.energy-title {
+  color: #64ffda !important;   /* 明るいシアン */
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+/* ドット（オーブ）も見やすく */
+.energy-orb { 
+  border: 1px solid #64ffda !important;
+}
+.energy-orb.filled {
+  background: #64ffda !important;
+}
+.media-overlay.cutin .media-frame { display: none !important; }
+.battle-actions, .battle-actions * { opacity: 1 !important; }
+.energy-title { color:#64ffda !important; font-weight:700; letter-spacing:.02em; }
+.energy-orb { border-color:#64ffda !important; }
+.energy-orb.filled { background:#64ffda !important; }
+.action-buttons{
+  display:flex !important; align-items:center; justify-content:center;
+  gap:8px; height:32px; padding:0; margin:0;
+}
+.action-btn{
+  position:static !important; inset:auto !important; transform:none !important;
+  width:auto; min-width:32px; height:100%;
+  aspect-ratio:1/1;
+  padding:0; margin:0; border-radius:6px;
+  display:grid; place-items:center; box-sizing:border-box;
+}
+.action-text{ display:none !important; }
+.action-icon{ width:20px; height:20px; }
+/* ===== エナジーとログを常にくっきり表示 ===== */
+.energy-bar, .energy-bar * {
+  color: #64ffda !important;
+  opacity: 1 !important;
+  font-weight: 700;
+}
+
+.battle-log, .battle-log * {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  font-size: 12px;
+  font-weight: 600;
+}
+/* 黒帯そのものはクリック不可にする */
+.battle-actions {
+  pointer-events: none;   /* 黒帯はクリック無効 */
+}
+
+/* ただしボタンは例外的にクリック可能 */
+.battle-actions .action-btn,
+.battle-actions .action-btn * {
+  pointer-events: auto;
+}
+<!-- ===== FIX: 黒帯のグレー化を完全無効化（アイコン/エナジー/ログ） ===== -->
+<style>
+  /* 黒帯配下の“薄く見える”要因を一括で無効化 */
+  .battle-actions, .battle-actions * {
+    opacity: 1 !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+  }
+  /* ボタンに乗ってる薄いオーバーレイを撤去 */
+  .battle-actions .action-btn::before {
+    background: transparent !important;
+  }
+  /* アイコン箱の半透明を撤去＆枠色をはっきり */
+  .battle-actions .action-icon {
+    background: transparent !important;
+    border: 1px solid #64ffda !important;
+  }
+  .battle-actions .action-icon img {
+    opacity: 1 !important;
+    filter: none !important;
+  }
+  /* エナジー＆ログを明色で固定 */
+  #energyOrbs .energy-orb { border-color:#64ffda !important; }
+  #energyOrbs .energy-orb.filled { background:#64ffda !important; }
+  .battle-actions .battle-log, .battle-actions .battle-log * { color:#fff !important; }
+
+  
+
+
+</style>
+
+
+</head>
+<body>
+<div id="loadingScreen" style="position:fixed;inset:0;background:#000;color:#64ffda;display:flex;align-items:center;justify-content:center;z-index:9999">
+  <span>Loading...</span>
+</div>
+
+  <div class="battle-container">
+    <div class="battle-header">
+      <div class="turn-info" id="turnInfo">ターン 1 - プレイヤーフェーズ (Lv.1)</div>
+      <div class="battle-controls">
+        <button class="control-btn" onclick="toggleCharacterSelect()">キャラ変更</button>
+        <button class="control-btn" onclick="resetBattle()">リロード</button>
+        <button class="control-btn" onclick="surrender()">降参</button>
+        <!-- アルバム（エンディングで解放／デバッグ時は常時ON） -->
+        <button class="control-btn" id="albumBtn" onclick="toggleAlbum()" disabled title="エンディング到達で解放">アルバム</button>
+      </div>
+    </div>
+
+    <!-- 中央演出オーバーレイ -->
+    <div class="media-overlay" id="mediaOverlay"></div>
+
+    <div class="battlefield">
+      <div class="enemy-side">
+        <div class="character-name">シャドウ・キャット</div>
+        <div class="enemy-meta">
+          <div class="enemy-level" id="enemyLevel">Lv.1</div>
+          <div class="enemy-atk" id="enemyAtk">ATK倍率 x1.0</div>
+        </div>
+        <div class="character-sprite shadow" id="enemySprite">🐱</div>
+        <div class="hp-bar-container">
+          <div class="hp-bar"><div class="hp-fill" id="enemyHpBar" style="width:100%"></div></div>
+          <div class="hp-text" id="enemyHpText">2000 / 2000</div>
+        </div>
+      </div>
+
+      <div class="player-side">
+        <div class="character-name" id="playerCharacterName">ファイヤーキャット <span id="buffEmoji">◻️◻️◻️</span></div>
+        <div class="character-sprite prism" id="playerSprite">🐱</div>
+        <div class="hp-bar-container">
+          <div class="hp-bar"><div class="hp-fill" id="playerHpBar" style="width:100%"></div></div>
+          <div class="hp-text" id="playerHpText">1000 / 1000</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="battle-actions">
+      <div class="action-buttons">
+        <button class="action-btn" id="attackBtn" onclick="handleAction('attack')" aria-label="攻撃" title="攻撃">
+          <div class="action-icon" id="attackIcon">⚔️</div>
+          <div class="action-text"><div class="action-title">攻撃</div><div class="action-cost">コスト: 2</div></div>
+        </button>
+
+        <button class="action-btn" id="skillBtn" onclick="handleAction('skill')" aria-label="スキル" title="スキル">
+          <div class="action-icon" id="skillIcon">✨</div>
+          <div class="action-text"><div class="action-title">スキル</div><div class="action-cost">コスト: 4</div></div>
+        </button>
+
+        <button class="action-btn" id="guardBtn" onclick="handleAction('guard')" aria-label="防御" title="防御">
+          <div class="action-icon" id="guardIcon">🛡️</div>
+          <div class="action-text"><div class="action-title">防御</div><div class="action-cost">コスト: 0</div></div>
+        </button>
+
+        <button class="action-btn" id="dodgeBtn" onclick="handleAction('dodge')" aria-label="回避" title="回避">
+          <div class="action-icon" id="dodgeIcon">💨</div>
+          <div class="action-text"><div class="action-title">回避</div><div class="action-cost">コスト: 2</div></div>
+        </button>
+
+        <button class="action-btn" id="specialSkillBtn" onclick="handleAction('specialSkill')" aria-label="特殊スキル" title="特殊スキル">
+          <div class="action-icon" id="specialSkillIcon">⭐</div>
+          <div class="action-text"><div class="action-title">特殊スキル</div><div class="action-cost">コスト: 5</div></div>
+        </button>
+
+        <button class="action-btn" id="specialBtn" onclick="handleAction('special')" aria-label="必殺技" title="必殺技">
+          <div class="action-icon" id="specialIcon">💥</div>
+          <div class="action-text"><div class="action-title" id="specialTitle">必殺技</div><div class="action-cost">コスト: 6</div></div>
+        </button>
+      </div>
+
+      <div class="battle-info">
+        <div class="energy-bar">
+          <div class="energy-title">エナジー</div>
+          <div class="energy-orbs" id="energyOrbs">
+            <div class="energy-orb filled"></div><div class="energy-orb filled"></div><div class="energy-orb filled"></div>
+            <div class="energy-orb filled"></div><div class="energy-orb filled"></div><div class="energy-orb filled"></div>
+            <div class="energy-orb"></div><div class="energy-orb"></div><div class="energy-orb"></div><div class="energy-orb"></div>
+          </div>
+        </div>
+        <div class="battle-log"><div class="log-text" id="battleLog">戦闘開始！行動を選択してください。</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アルバムモーダル -->
+  <div class="album-modal" id="albumModal">
+    <div class="album-header">アルバム <button class="album-close" onclick="toggleAlbum()">閉じる</button></div>
+    <div class="album-grid" id="albumGrid"></div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" onclick="if(event.target===this) closeLightbox()">
+    <div class="lightbox-content">
+      <button class="lightbox-close" onclick="closeLightbox()" aria-label="閉じる">✕</button>
+      <div id="lightboxMedia"></div>
+      <div class="lightbox-caption" id="lightboxCaption"></div>
+    </div>
+  </div>
+
+  <!-- 左：キャラ選択 -->
+  <div class="character-select-panel" id="characterSelectPanel" style="display:none;position:fixed;top:70px;left:20px;width:300px;background:rgba(0,0,0,.95);padding:15px;border-radius:10px;border:2px solid #64ffda;z-index:2001;max-height:calc(100vh - 100px);overflow:auto">
+    <h3 style="color:#64ffda;margin-bottom:15px">キャラクター選択</h3>
+    <div class="character-option" onclick="selectCharacter('fire', true)" style="display:flex;align-items:center;gap:15px;padding:10px;margin-bottom:10px;background:rgba(100,255,218,.1);border:1px solid rgba(100,255,218,.3);border-radius:8px;cursor:pointer">
+      <div class="character-preview fire" style="width:60px;height:60px;border-radius:10px;border:2px solid #64ffda;display:flex;align-items:center;justify-content:center;font-size:2rem">🔥</div>
+      <div class="character-info"><div class="character-name-select" style="color:#64ffda;font-weight:bold;margin-bottom:5px">ファイヤーキャット</div><div class="character-desc" style="color:#a8b2d1;font-size:.8rem">火炎系</div></div>
+    </div>
+    <div class="character-option" onclick="selectCharacter('prism', true)" style="display:flex;align-items:center;gap:15px;padding:10px;margin-bottom:10px;background:rgba(100,255,218,.1);border:1px solid rgba(100,255,218,.3);border-radius:8px;cursor:pointer">
+      <div class="character-preview prism" style="width:60px;height:60px;border-radius:10px;border:2px solid #64ffda;display:flex;align-items:center;justify-content:center;font-size:2rem">💎</div>
+      <div class="character-info"><div class="character-name-select" style="color:#64ffda;font-weight:bold;margin-bottom:5px">プリズムキャット</div><div class="character-desc" style="color:#a8b2d1;font-size:.8rem">光属性</div></div>
+    </div>
+    <div class="character-option" onclick="selectCharacter('shadow', true)" style="display:flex;align-items:center;gap:15px;padding:10px;margin-bottom:10px;background:rgba(100,255,218,.1);border:1px solid rgba(100,255,218,.3);border-radius:8px;cursor:pointer">
+      <div class="character-preview shadow" style="width:60px;height:60px;border-radius:10px;border:2px solid #64ffda;display:flex;align-items:center;justify-content:center;font-size:2rem">🌙</div>
+      <div class="character-info"><div class="character-name-select" style="color:#64ffda;font-weight:bold;margin-bottom:5px">シャドウキャット</div><div class="character-desc" style="color:#a8b2d1;font-size:.8rem">闇属性</div></div>
+    </div>
+    <div style="margin-top:12px;text-align:center"><button class="control-btn" onclick="toggleCharacterSelect()" style="border-radius:8px">閉じる</button></div>
+  </div>
+<script>
+  // ===== 画像プリロード =====
+function preloadImages(sources, callback){
+  let loaded = 0;
+  if(sources.length===0){ callback(); return; }
+  sources.forEach(src=>{
+    const img=new Image();
+    img.onload=img.onerror=()=>{
+      loaded++;
+      if(loaded===sources.length) callback();
+    };
+    img.src=src;
+  });
+}
+
+// ===== 画像ベースパス =====
+const ASSET = './assets';
+const P = {
+  fire:   `${ASSET}/fire-cat`,
+  prism:  `${ASSET}/prism-cat`,
+  shadow: `${ASSET}/shadow-cat`,
+  ui:     `${ASSET}/ui`
+};
+
+// === 演出時間 ===
+const VICTORY_GIF_MS = 5000;
+const VICTORY_MARGIN_MS = 800;
+const VICTORY_TOTAL_WAIT = VICTORY_GIF_MS + VICTORY_MARGIN_MS;
+
+// デバッグ：アルバムを常時ON（公開時は false）
+const DEBUG_FORCE_ALBUM = false;
+
+// ===== メディア初期値（ファイヤーで開始） =====
+var mediaDefaults = {
+  // UIフレーム & ボタンアイコン
+  iconFrameBlue:{src:`${P.ui}/icon-frame-blue.png`},
+  iconFrameRed:{src:`${P.ui}/icon-frame-red.png`},
+  attackIcon:{src:`${P.ui}/attack-icon.png`},
+  skillIcon:{src:`${P.ui}/skill-icon.png`},
+  guardIcon:{src:`${P.ui}/guard-icon.png`},
+  dodgeIcon:{src:`${P.ui}/dodge-icon.png`},
+  specialSkillIcon:{src:`${P.ui}/special-skill-icon.png`},
+  specialIcon:{src:`${P.ui}/special-icon.png`},
+
+  // プレイヤー/敵
+  icon:{src:`${P.fire}/icon.png`},
+  enemyIcon:{src:`${ASSET}/enemy-shadowcat.png`},
+
+  // 演出（★special-skill を明示）
+  attack:{src:`${P.fire}/attack.png`},
+  skill:{src:`${P.fire}/skill.png`},
+  guard:{src:`${P.fire}/guard.png`},
+  specialSkill:{src:`${P.fire}/special-skill.png`},
+  special:{src:`${P.fire}/special.png`},
+  awakening:{src:`${P.fire}/awakening.png`},
+  cutIn:{src:`${P.fire}/cutin.png`},
+  dodge:{src:`${P.fire}/dodge.png`},
+  damage:{src:`${P.fire}/damage.png`},
+  victory:{src:`${P.fire}/victory.gif`},
+  defeat:{src:`${P.fire}/defeat.png`},
+  uiBackground:{src:`${P.fire}/bg.png`},
+  commandBackground:{src:`${P.ui}/cmd-bg.png`},
+  ending:{src:`${ASSET}/ending.png`}
+};
+
+// ===== ゲーム状態 =====
+var game = {
+  level:1,
+  levelData:{1:{hp:2000,atk:1.0},2:{hp:2500,atk:1.1},3:{hp:3000,atk:1.2},4:{hp:3500,atk:1.3},5:{hp:4000,atk:1.4}},
+  enemyHp:2000,enemyMaxHp:2000,enemyAtkMul:1.0,
+  energy:6,turn:1,currentCharacter:'fire',
+  gameEnded:false,mediaPlaying:false,
+  guardActive:false,dodgePenalty:false,
+  overlayLock:false,overlayRunId:0,overlayCloseTimer:null,overlayForceTimer:null,
+  albumUnlocked:false,
+  teamBuff:{fire:false,prism:false,shadow:false},
+  characters:{
+    fire:{name:'ファイヤーキャット',basePath:P.fire,hp:1000,maxHp:1000,specialActive:false,defeated:false},
+    prism:{name:'プリズムキャット',  basePath:P.prism,hp:1000,maxHp:1000,specialActive:false,defeated:false},
+    shadow:{name:'シャドウキャット',  basePath:P.shadow,hp:1000,maxHp:1000,specialActive:false,defeated:false}
+  },
+  media:{},playerHp:1000
+};
+
+// ===== 初期化 =====
+document.addEventListener('DOMContentLoaded', ()=>{
+  const sources = Object.values(mediaDefaults).map(v=>v.src);
+  const start = Date.now();
+  const MIN_LOADING_MS = 1200;
+  preloadImages(sources, ()=>{
+    const elapsed = Date.now() - start;
+    const remain = Math.max(0, MIN_LOADING_MS - elapsed);
+    setTimeout(()=>{
+      document.getElementById('loadingScreen').style.display='none';
+      initializeGame();
+    }, remain);
+  });
+});  // ★ ← これが抜けていた
+
+window.addEventListener('load', ()=>setTimeout(enableActionButtons,100));
+
+function initializeGame(){
+  for(const k in mediaDefaults){
+    const v=mediaDefaults[k];
+    game.media[k]={src:v.src,isVideo:/\.(mp4|webm|ogg|mov|avi)$/i.test(v.src)};
+  }
+  setEnemyLevel(game.level);
+  document.getElementById('playerCharacterName').childNodes[0].nodeValue = game.characters[game.currentCharacter].name + ' ';
+  updatePlayerIcon(); updateEnemyIcon();
+  updateActionIcons(); updateUIBackground(); updateCommandBackground(); updateCharacterSelectIcons();
+  updateHP(); updateEnemyMetaUI(); updateBuffEmoji(); updateAlbumButton();
+  updateCharacterDefeatedStyles();
+
+  // 開始時 +3
+  game.energy=Math.min(10,game.energy+3);
+  updateEnergy();
+  updateLog('戦闘開始！エナジー+3。行動を選択してください。');
+}
+
+/* ---------- レベル/メタ ---------- */
+function setEnemyLevel(level){
+  const d=game.levelData[level];
+  game.level=level; game.enemyMaxHp=d.hp; game.enemyHp=d.hp; game.enemyAtkMul=d.atk;
+  document.getElementById('turnInfo').textContent=`ターン ${game.turn} - プレイヤーフェーズ (Lv.${game.level})`;
+  updateEnemyMetaUI(); updateHP();
+}
+function updateEnemyMetaUI(){
+  enemyLevel.textContent='Lv.'+game.level;
+  enemyAtk.textContent='ATK倍率 x'+game.enemyAtkMul.toFixed(1);
+}
+
+/* ---------- UI更新 ---------- */
+function updateUIBackground(){
+  if(game.media.uiBackground){
+    document.body.style.backgroundImage=`url("${game.media.uiBackground.src}"), linear-gradient(135deg,#0a0e27 0%,#1a1a2e 50%,#16213e 100%)`;
+  }
+}
+function updateCommandBackground(){
+  if(!game.media.commandBackground) return;
+  document.querySelectorAll('.action-btn').forEach(b=>{
+    b.style.backgroundImage=`url("${game.media.commandBackground.src}"), linear-gradient(135deg,#667eea,#764ba2)`;
+  });
+}
+function updateActionIcons(){
+  const setIcon=(id,src,fallback)=>{
+    const el=document.getElementById(id); if(!el) return;
+    if(src){ el.innerHTML = `<img src="${src}" alt="" onerror="this.onerror=null;this.parentElement.textContent='${fallback}'">`; }
+    else{ el.textContent = fallback; }
+  };
+  setIcon('attackIcon',        game.media.attackIcon?.src,        '⚔️');
+  setIcon('skillIcon',         game.media.skillIcon?.src,         '✨');
+  setIcon('guardIcon',         game.media.guardIcon?.src,         '🛡️');
+  setIcon('dodgeIcon',         game.media.dodgeIcon?.src,         '💨');
+  setIcon('specialSkillIcon',  game.media.specialSkillIcon?.src,  '⭐');
+  setIcon('specialIcon',       game.media.specialIcon?.src,       '💥');
+}
+function updateCharacterSelectIcons(){
+  const pref=(base)=>`${base}/change.png`;
+  const fallback=(base)=>`${base}/icon.png`;
+  [['.character-preview.fire',P.fire],['.character-preview.prism',P.prism],['.character-preview.shadow',P.shadow]]
+    .forEach(([sel,base])=>{
+      const el=document.querySelector(sel); if(!el) return;
+      el.innerHTML=`<img src="${pref(base)}" onerror="this.onerror=null;this.src='${fallback(base)}'" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
+    });
+}
+function updateCharacterDefeatedStyles(){
+  [
+    {key:'fire',   selector: ".character-option[onclick*=\"'fire'\"]"},
+    {key:'prism',  selector: ".character-option[onclick*=\"'prism'\"]"},
+    {key:'shadow', selector: ".character-option[onclick*=\"'shadow'\"]"}
+  ].forEach(({key, selector})=>{
+    const node = document.querySelector(selector);
+    if(!node) return;
+    if (game.characters[key].defeated) node.classList.add('is-defeated');
+    else node.classList.remove('is-defeated');
+  });
+}
+function updatePlayerIcon(){
+  const s=document.getElementById('playerSprite'), m=game.media.icon;
+  s.innerHTML = m ? `<img src="${m.src}" style="width:100%;height:100%;object-fit:cover;border-radius:15px">` : '🐱';
+  if(game.media.iconFrameBlue){const f=document.createElement('img');f.src=game.media.iconFrameBlue.src;f.className='icon-frame';f.style.objectFit='cover';f.style.borderRadius='15px';s.appendChild(f);}
+}
+function updateEnemyIcon(){
+  const s=document.getElementById('enemySprite'), m=game.media.enemyIcon;
+  s.innerHTML = m ? `<img src="${m.src}" style="width:100%;height:100%;object-fit:cover;border-radius:15px">` : '🐱';
+  if(game.media.iconFrameRed){const f=document.createElement('img');f.src=game.media.iconFrameRed.src;f.className='icon-frame';f.style.objectFit='cover';f.style.borderRadius='15px';s.appendChild(f);}
+}
+function updateHP(){
+  const ch=game.characters[game.currentCharacter];
+  const pPct=Math.max(0,(game.playerHp??ch.hp)/ch.maxHp)*100;
+  const ePct=Math.max(0,game.enemyHp/game.enemyMaxHp)*100;
+  playerHpBar.style.width=pPct+'%'; enemyHpBar.style.width=ePct+'%';
+  colorBar(playerHpBar,pct=pPct); colorBar(enemyHpBar,pct=ePct);
+  playerHpText.textContent=(game.playerHp??ch.hp)+' / '+ch.maxHp;
+  enemyHpText.textContent=game.enemyHp+' / '+game.enemyMaxHp;
+  updateSpecialAttack();
+}
+function colorBar(el,pct){ el.classList.remove('yellow','red'); if(pct<=25) el.classList.add('red'); else if(pct<=50) el.classList.add('yellow'); }
+function updateSpecialAttack(){
+  const ch=game.characters[game.currentCharacter];
+  const pPct=((game.playerHp??ch.hp)/ch.maxHp)*100;
+  const t=document.getElementById('specialTitle');
+  t.textContent = (pPct<=25) ? '覚醒技' : '必殺技';
+}
+
+/* ---------- オーバーレイ＆タイマー ---------- */
+function positionOverlayCenter(overlay,w,h){
+  const r=document.querySelector('.battlefield').getBoundingClientRect();
+  overlay.style.position='fixed'; overlay.style.left=(r.left+r.width/2)+'px'; overlay.style.top=(r.top+r.height/2)+'px';
+  overlay.style.transform='translate(-50%,-50%)'; overlay.style.width=w; overlay.style.height=h;
+}
+function cancelOverlayTimers(){
+  if(game.overlayCloseTimer){clearTimeout(game.overlayCloseTimer);game.overlayCloseTimer=null;}
+  if(game.overlayForceTimer){clearTimeout(game.overlayForceTimer);game.overlayForceTimer=null;}
+}
+/* ---------- 行動 ---------- */
+function handleAction(action){
+  if (game.gameEnded || game.mediaPlaying) return;
+
+  const ch = game.characters[game.currentCharacter];
+  const curHp = game.playerHp ?? ch.hp;
+
+  if (curHp <= 0 || ch.defeated){
+    updateLog('このキャラは戦闘不能です。交代してください。');
+    const next = Object.keys(game.characters).find(k => !game.characters[k].defeated);
+    if (next) selectCharacter(next, false, true);
+    return;
+  }
+  useAction(action);
+}
+
+function useAction(type){
+  const cost = {attack:2, skill:4, guard:0, dodge:2, specialSkill:5, special:6}[type];
+  if (game.energy < cost){ updateLog('エナジーが不足しています！'); return; }
+  game.energy -= cost; updateEnergy();
+
+  const ch = game.characters[game.currentCharacter];
+  const pPct = ((game.playerHp ?? ch.hp) / ch.maxHp) * 100;
+  let damage = 0, mediaTime = 1500, delayTime = mediaTime;
+
+  switch(type){
+    case 'attack': {
+      damage = Math.floor(Math.random()*150)+100;
+      if (game.teamBuff.fire) damage *= 2;
+      if (game.teamBuff.shadow && Math.random() < 0.25) damage *= 3;
+      updateLog(`攻撃！${damage}ダメージ！`);
+      showActionMedia('attack', mediaTime);
+      break;
+    }
+    case 'skill': {
+      damage = Math.floor(Math.random()*200)+150;
+      if (game.teamBuff.fire) damage *= 2;
+      if (game.teamBuff.shadow && Math.random() < 0.25) damage *= 3;
+      updateLog(`スキル！${damage}ダメージ！`);
+      showActionMedia('skill', mediaTime);
+      break;
+    }
+    case 'guard':
+      game.guardActive = true;
+      updateLog('防御！次の被ダメージ30%軽減（1回のみ）');
+      showActionMedia('guard', mediaTime);
+      break;
+
+    case 'dodge': {
+      showActionMedia('dodge', mediaTime);
+      const success = Math.random() < 0.7;
+      if (success){
+        updateLog('回避成功！エナジー全回復。このターンの敵攻撃はスキップ！');
+        game.energy = 10; updateEnergy();
+        setTimeout(nextTurn, mediaTime+300);
+        return;
+      } else {
+        updateLog('回避失敗…このターンの被ダメージ1.2倍！');
+        game.dodgePenalty = true;
+        setTimeout(()=>{ if(!game.gameEnded) enemyAttack(); }, mediaTime+300);
+        return;
+      }
+    }
+
+    case 'specialSkill': {
+      ch.specialActive = true;
+      game.teamBuff[game.currentCharacter] = true;
+      showActionMedia('specialSkill', mediaTime);
+
+      if (game.currentCharacter==='fire')   updateLog('特殊スキル！全員にファイヤーバフ（与ダメ2倍）');
+      if (game.currentCharacter==='shadow') updateLog('特殊スキル！全員にシャドウバフ（25%で与ダメ3倍）');
+      if (game.currentCharacter==='prism')  updateLog('特殊スキル！全員にプリズムバフ（25%で被ダメ無効）');
+
+      updateBuffEmoji();
+
+      // 同ターンで必ず敵行動へ（スキップさせない）
+      setTimeout(()=>{ if(!game.gameEnded) enemyAttack(); }, mediaTime+300);
+      return;
+    }
+
+    case 'special': {
+      damage = (pPct <= 25)
+        ? Math.floor(Math.random()*400)+350
+        : Math.floor(Math.random()*300)+250;
+      if (game.teamBuff.fire) damage *= 2;
+      if (game.teamBuff.shadow && Math.random() < 0.25) damage *= 3;
+
+      if (pPct <= 25){
+        updateLog(`覚醒技！${damage}のダメージ！`);
+        showCutInAndAwakening(1500,1500);
+        document.getElementById('mediaOverlay').classList.add('cutin');
+        delayTime = 3000;
+      } else {
+        updateLog(`必殺技！${damage}の大ダメージ！`);
+        showActionMedia('special', mediaTime);
+      }
+      break;
+    }
+  }
+
+  if (damage > 0){
+    game.enemyHp = Math.max(0, game.enemyHp - damage);
+    updateHP();
+    if (game.enemyHp <= 0){ setTimeout(victory, delayTime+500); return; }
+  }
+  setTimeout(()=>{ if(!game.gameEnded) enemyAttack(); }, delayTime+500);
+}
+
+/* ---------- 敵攻撃 ---------- */
+function enemyAttack(){
+  let base = Math.floor(Math.random()*201)+120; // 120〜320
+  let damage = Math.floor(base * game.enemyAtkMul);
+
+  if (game.dodgePenalty){
+    damage = Math.floor(damage * 1.2);
+    updateLog(`（回避失敗ペナルティ）ダメージ1.2倍 → ${damage}`);
+    game.dodgePenalty = false;
+  } else {
+    if (game.teamBuff.prism && Math.random()<0.25){
+      damage = 0;
+      updateLog('敵の攻撃！プリズムバフでダメージ完全無効！');
+    } else {
+      updateLog(`敵の攻撃！倍率x${game.enemyAtkMul.toFixed(1)} → ${damage}ダメージ`);
+    }
+  }
+
+  if (game.guardActive){ damage = Math.floor(damage*0.7); game.guardActive=false; updateLog(`防御発動！被ダメ30%軽減 → ${damage}`); }
+  damage = Math.max(0, Math.round(damage/10)*10);
+
+  const ch = game.characters[game.currentCharacter];
+  let cur = (game.playerHp ?? ch.hp);
+  cur = Math.max(0, cur - damage);
+  game.playerHp = cur; ch.hp = cur;
+
+  updateHP();
+  const t = 1000;
+  showMedia('damage', t);
+
+  if (cur <= 0){ setTimeout(defeat, t+500); return; }
+  setTimeout(nextTurn, t+500);
+}
+
+/* ---------- 勝利・敗北・降参 ---------- */
+function victory(){
+  game.gameEnded = true;
+  disableActionButtons();
+  updateLog('勝利！');
+  if (game.media.victory) showMedia('victory', VICTORY_GIF_MS);
+
+  if (game.level < 5){
+    setTimeout(function(){
+      // 全員HP全回復 & バフ解除
+      for (const k in game.characters){
+        const c = game.characters[k];
+        c.hp = c.maxHp; c.specialActive=false; c.defeated=false;
+      }
+      game.teamBuff = {fire:false,prism:false,shadow:false};
+      updateBuffEmoji();
+
+      // ★プレイヤーHPは先に復元
+      game.playerHp = game.characters[game.currentCharacter].maxHp;
+
+      // 進行
+      game.energy = Math.min(10, game.energy + 3);
+      game.turn += 1;
+      game.level += 1;
+
+      // 敵レベルを反映
+      setEnemyLevel(game.level);
+
+      // ★表示の確実な同期
+      updateHP();
+      updateSpecialAttack();
+
+      game.gameEnded = false;
+      enableActionButtons();
+      updateCharacterDefeatedStyles();
+      updateLog(`レベル${game.level-1}クリア！全回復＆バフ解除で Lv.${game.level} に突入！`);
+    }, VICTORY_TOTAL_WAIT);
+  } else {
+    setTimeout(()=>{ showEnding(); }, VICTORY_TOTAL_WAIT);
+  }
+}
+
+function defeat(){
+  const key = game.currentCharacter;
+  const ch = game.characters[key];
+  ch.hp = 0; ch.defeated = true;
+
+  // UI：敗北スプライトに差し替え
+  const base = ch.basePath;
+  const ps = document.getElementById('playerSprite');
+  ps.innerHTML = `<img src="${base}/defeat.png" style="width:100%;height:100%;object-fit:cover;border-radius:15px">`;
+
+  updateHP();
+  updateCharacterDefeatedStyles();
+  disableActionButtons();
+  if (game.media.defeat) showMedia('defeat', 1200);
+
+  // 次の生存キャラへ自動交代
+  const next = Object.keys(game.characters).find(k => !game.characters[k].defeated);
+  if (next){
+    setTimeout(function(){
+      selectCharacter(next, false, true);
+      enableActionButtons();
+      updateLog(game.characters[next].name + 'が戦闘に参加！');
+      setTimeout(nextTurn, 500);
+    }, 1600);
+    return;
+  }
+
+  // 全滅
+  game.gameEnded = true;
+  updateLog('全キャラクター戦闘不能…完全敗北…');
+  if (game.media.defeat) showMedia('defeat', 1500);
+}
+
+function surrender(){
+  if(!confirm('戦闘を諦めますか？')) return;
+  game.gameEnded = true;
+  disableActionButtons();
+  updateLog('降参しました…');
+  if (game.media.defeat) showMedia('defeat', 1200);
+}
+
+/* ---------- ターン開始 (+3) ---------- */
+function nextTurn(){
+  game.turn++;
+  game.energy = Math.min(10, game.energy + 3);
+  updateEnergy();
+  updateLog('次のターンです');
+  document.getElementById('turnInfo').textContent = `ターン ${game.turn} (Lv.${game.level})`;
+}
+
+/* ---------- パネル/キャラ選択 ---------- */
+function toggleCharacterSelect(){
+  const p = document.getElementById('characterSelectPanel');
+  const show = (p.style.display==='none' || p.style.display==='');
+  p.style.display = show ? 'block' : 'none';
+  if (show){
+    updateCharacterDefeatedStyles();
+    p.style.pointerEvents = 'auto';
+    p.style.zIndex = 2001;
+  }
+}
+
+function selectCharacter(type, closePanel=true, force=false){
+  if (!force && game.gameEnded) return;
+
+  game.currentCharacter = type;
+  const ch = game.characters[type];
+  game.playerHp = ch.hp;
+
+  document.getElementById('playerCharacterName').childNodes[0].nodeValue = ch.name + ' ';
+
+  const base = ch.basePath;
+  game.media.icon.src           = base + '/icon.png';
+  game.media.attack.src         = base + '/attack.png';
+  game.media.skill.src          = base + '/skill.png';
+  game.media.guard.src          = base + '/guard.png';
+  game.media.specialSkill.src   = base + '/special-skill.png'; // ← 特殊スキル
+  game.media.special.src        = base + '/special.png';       // ← 必殺技
+  game.media.awakening.src      = base + '/awakening.png';
+  game.media.cutIn.src          = base + '/cutin.png';
+  game.media.dodge.src          = base + '/dodge.png';
+  game.media.damage.src         = base + '/damage.png';
+  game.media.victory.src        = base + '/victory.gif';
+  game.media.defeat.src         = base + '/defeat.png';
+  game.media.uiBackground.src   = base + '/bg.png';
+
+  updatePlayerIcon();
+  updateActionIcons();
+  updateSpecialAttack();
+  updateUIBackground();
+  updateCharacterSelectIcons();
+  updateHP();
+  updateBuffEmoji();
+  updateCharacterDefeatedStyles();
+
+  if (closePanel){
+    const p = document.getElementById('characterSelectPanel');
+    if (p && p.style.display==='block') p.style.display='none';
+  }
+  enableActionButtons();
+}
+
+/* ---------- リセット（全体初期化） ---------- */
+function resetBattle(){
+  // 演出停止＆片付け
+  cancelOverlayTimers();
+  const overlay = document.getElementById('mediaOverlay');
+  overlay.classList.remove('show');
+  overlay.innerHTML = '';
+  game.overlayLock = false;
+  game.mediaPlaying = false;
+
+  // パネルを閉じる
+  const cs = document.getElementById('characterSelectPanel'); if(cs) cs.style.display='none';
+  const album = document.getElementById('albumModal'); if(album) album.style.display='none';
+
+  // ステート完全初期化
+  game.level = 1; setEnemyLevel(1);
+  for (const k in game.characters){
+    const c = game.characters[k];
+    c.hp = c.maxHp; c.specialActive=false; c.defeated=false;
+  }
+  game.teamBuff = {fire:false,prism:false,shadow:false};
+  game.dodgePenalty = false;
+  game.guardActive = false;
+  game.currentCharacter = 'fire';
+  game.playerHp = game.characters.fire.maxHp;
+  game.energy = 6;
+  game.turn = 1;
+  game.gameEnded = false;
+
+  // UI再構築
+  initializeGame();
+  updateCharacterDefeatedStyles();
+  updateLog('リセット完了！レベル1から再スタート！');
+}
+
+/* ---------- 演出：カットイン→覚醒 ---------- */
+function showCutInAndAwakening(cutInDuration=1200, awakeningDuration=1500){
+  game.mediaPlaying = true; disableActionButtons();
+  const overlay = document.getElementById('mediaOverlay');
+  cancelOverlayTimers();
+  const runId = ++game.overlayRunId;
+  overlay.classList.remove('show');
+
+  const hasCut = !!(game.media.cutIn && game.media.cutIn.src);
+  const hasAwk = !!(game.media.awakening && game.media.awakening.src);
+
+ function closeOverlay(){
+  if (game.overlayRunId !== runId) return;
+  overlay.classList.remove('show');
+  overlay.classList.remove('cutin');   // ←これを追加
+  setTimeout(()=>{
+    if (game.overlayRunId !== runId) return;
+    overlay.innerHTML = '';
+    positionOverlayCenter(overlay,'400px','400px');
+    game.mediaPlaying = false;
+    if (!game.gameEnded) enableActionButtons();
+  }, 250);
+}
+
+ function showAwakening(){
+  if (game.overlayRunId !== runId) return;
+  positionOverlayCenter(overlay,'600px','600px');
+  // 枠を入れない
+  const content = hasAwk
+    ? `<img src="${game.media.awakening.src}" style="width:100%;height:100%;object-fit:contain">`
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem">Awakening</div>`;
+  overlay.innerHTML = `<div class="media-content">${content}</div>`;
+  overlay.classList.add('show');
+  game.overlayCloseTimer = setTimeout(()=>{ if(game.overlayRunId===runId) closeOverlay(); }, awakeningDuration);
+}
+
+// (B) カットイン：枠を差し込まない
+function showCutIn(){
+  if (game.overlayRunId !== runId) return;
+  overlay.style.width='100vw'; overlay.style.height='auto';
+  overlay.style.left='50%'; overlay.style.top='50%'; overlay.style.transform='translate(-50%,-50%)';
+  const content = hasCut
+    ? `<img src="${game.media.cutIn.src}" style="width:100vw;max-height:100vh;object-fit:contain">`
+    : `<div style="width:100vw;height:60vh;display:flex;align-items:center;justify-content:center;font-size:2rem">Cut-in</div>`;
+  overlay.innerHTML = `<div class="media-content">${content}</div>`;
+  overlay.classList.add('show');
+  game.overlayCloseTimer = setTimeout(()=>{
+    if (game.overlayRunId !== runId) return;
+    overlay.classList.remove('show');
+    setTimeout(()=>{ if (game.overlayRunId===runId) showAwakening(); }, 120);
+  }, cutInDuration);
+}
+
+  if (hasCut) showCutIn();
+  else if (hasAwk) showAwakening();
+  else closeOverlay();
+}
+
+/* ---------- 汎用演出 ---------- */
+function showMedia(type, duration=1500){
+  const m = game.media[type];
+  if (!m){ game.mediaPlaying=false; enableActionButtons(); return; }
+
+  game.mediaPlaying = true; disableActionButtons();
+  const overlay = document.getElementById('mediaOverlay');
+  cancelOverlayTimers();
+  const runId = ++game.overlayRunId;
+
+  positionOverlayCenter(overlay,'400px','400px');
+  const content = m.isVideo
+    ? `<video src="${m.src}" autoplay muted loop style="width:100%;height:100%;object-fit:contain"></video>`
+    : `<img src="${m.src}" style="width:100%;height:100%;object-fit:contain">`;
+ const frame = game.media.iconFrameBlue ? `<img src="${game.media.iconFrameBlue.src}" class="media-frame">` : '';
+ overlay.innerHTML = `<div class="media-content">${content}${frame}</div>`;
+  overlay.classList.add('show');
+
+  game.overlayCloseTimer = setTimeout(()=>{
+    if (game.overlayRunId !== runId || game.overlayLock) return;
+    overlay.classList.remove('show');
+    setTimeout(()=>{
+      if (game.overlayRunId !== runId || game.overlayLock) return;
+      overlay.innerHTML = '';
+      game.mediaPlaying = false;
+      if (!game.gameEnded) enableActionButtons();
+    }, 220);
+  }, duration);
+
+  // 保険：表示時間ブレ対策
+  game.overlayForceTimer = setTimeout(()=>{
+    if (game.overlayRunId !== runId || game.overlayLock) return;
+    if (game.mediaPlaying){
+      overlay.classList.remove('show'); overlay.innerHTML=''; game.mediaPlaying=false;
+      if (!game.gameEnded) enableActionButtons();
+    }
+  }, duration+2000);
+}
+
+function showMediaSrc(src, duration=1500){
+  if (!src){ game.mediaPlaying=false; enableActionButtons(); return; }
+  game.mediaPlaying = true; disableActionButtons();
+  const overlay = document.getElementById('mediaOverlay');
+  cancelOverlayTimers();
+  const runId = ++game.overlayRunId;
+
+  positionOverlayCenter(overlay,'400px','400px');
+  const isVideo = /\.(mp4|webm|ogg|mov|avi)$/i.test(src);
+  const content = isVideo
+    ? `<video src="${src}" autoplay muted loop style="width:100%;height:100%;object-fit:contain"></video>`
+    : `<img src="${src}" style="width:100%;height:100%;object-fit:contain">`;
+  const frame = game.media.iconFrameBlue ? `<img src="${game.media.iconFrameBlue.src}" class="media-frame" style="object-fit:contain">` : '';
+  overlay.innerHTML = `<div class="media-content">${content}${frame}</div>`;
+  overlay.classList.add('show');
+
+  game.overlayCloseTimer = setTimeout(()=>{
+    if (game.overlayRunId !== runId || game.overlayLock) return;
+    overlay.classList.remove('show');
+    setTimeout(()=>{
+      if (game.overlayRunId !== runId || game.overlayLock) return;
+      overlay.innerHTML=''; game.mediaPlaying=false;
+      if(!game.gameEnded) enableActionButtons();
+    }, 220);
+  }, duration);
+
+  game.overlayForceTimer = setTimeout(()=>{
+    if (game.overlayRunId !== runId || game.overlayLock) return;
+    if (game.mediaPlaying){
+      overlay.classList.remove('show'); overlay.innerHTML=''; game.mediaPlaying=false;
+      if(!game.gameEnded) enableActionButtons();
+    }
+  }, duration+2000);
+}
+
+/* ---------- 特殊スキルは special-skill を最優先 ---------- */
+function showActionMedia(type, duration=1500){
+  const m = game.media[type];
+  if (m && m.src){ showMedia(type, duration); return; }
+
+  let fb = null;
+  if (type === 'specialSkill'){
+    fb = game.media.specialSkill?.src
+      || game.media.icon?.src
+      || game.media.specialSkillIcon?.src;
+  } else {
+    fb = {
+      attack:  game.media.attackIcon?.src,
+      skill:   game.media.skillIcon?.src,
+      guard:   game.media.guardIcon?.src,
+      dodge:   game.media.dodgeIcon?.src,
+      special: game.media.specialIcon?.src
+    }[type] || null;
+  }
+  showMediaSrc(fb, duration);
+}
+
+/* ---------- エンディング（永続）＆アルバム解放 ---------- */
+function showEnding(){
+  const overlay = document.getElementById('mediaOverlay');
+  game.overlayLock = true; // 永続表示
+  positionOverlayCenter(overlay,'520px','520px');
+  const imgHtml = (game.media.ending && game.media.ending.src)
+    ? `<img src="${game.media.ending.src}" style="width:100%;height:100%;object-fit:contain">`
+    : `<div style="width:100%;height:100%;background:#000"></div>`;
+  const frame = game.media.iconFrameBlue ? `<img src="${game.media.iconFrameBlue.src}" class="media-frame" style="object-fit:contain">` : '';
+  overlay.innerHTML = `<div class="media-content">${imgHtml}${frame}</div>`;
+  overlay.classList.add('show');
+  game.gameEnded = true;
+  disableActionButtons();
+  unlockAlbum();
+}
+
+/* ---------- アルバム ---------- */
+function unlockAlbum(){ if(!game.albumUnlocked){ game.albumUnlocked=true; updateAlbumButton(); updateLog('アルバムが解放されました！'); } }
+function updateAlbumButton(){
+  const btn = document.getElementById('albumBtn');
+  const unlocked = game.albumUnlocked;  // ← クリア後にunlockAlbum()でtrueになる
+  btn.disabled = !unlocked;
+  btn.title = unlocked ? 'キャラ画像アルバムを開く' : 'エンディング到達で解放';
+}
+function toggleAlbum(){
+  const modal = document.getElementById('albumModal');
+  const show = (modal.style.display!=='block');
+  modal.style.display = show ? 'block' : 'none';
+  if (show) buildAlbumGrid();
+}
+function buildAlbumGrid(){
+  const grid = document.getElementById('albumGrid');
+  grid.innerHTML = '';
+  const order = ['fire','prism','shadow'];
+  order.forEach(key=>{
+    const c = game.characters[key];
+    const base = c.basePath;
+
+    const sec = document.createElement('div');
+    sec.className='album-section';
+    sec.textContent = c.name;
+    grid.appendChild(sec);
+
+    const items = [
+      {label:'アイコン',     src: base+'/icon.png'},
+      {label:'チェンジ',     src: base+'/change.png'},
+      {label:'カットイン',   src: base+'/cutin.png'},
+      {label:'攻撃',         src: base+'/attack.png'},
+      {label:'スキル',       src: base+'/skill.png'},
+      {label:'防御',         src: base+'/guard.png'},
+      {label:'回避',         src: base+'/dodge.png'},
+      {label:'特殊スキル',   src: base+'/special-skill.png'},
+      {label:'必殺技',       src: base+'/special.png'},
+      {label:'覚醒技',       src: base+'/awakening.png'},
+      {label:'ダメージ',     src: base+'/damage.png'},
+      {label:'勝利',         src: base+'/victory.gif'},
+      {label:'敗北',         src: base+'/defeat.png'},
+      {label:'背景',         src: base+'/bg.png'}
+    ];
+
+    items.forEach(it=>{
+      const card = document.createElement('div'); card.className='album-card';
+      const thumb = document.createElement('div'); thumb.className='album-thumb';
+
+      if (/\.(gif|png|jpg|jpeg|webp)$/i.test(it.src)){
+        thumb.innerHTML = `<img loading="lazy" src="${it.src}" alt="${it.label}">`;
+        thumb.style.cursor = 'zoom-in';
+        thumb.onclick = ()=>openLightbox(it.src, `${c.name}：${it.label}`);
+      } else if (/\.(mp4|webm|ogg|mov|avi)$/i.test(it.src)){
+        thumb.innerHTML = `<video src="${it.src}" muted style="background:#000"></video>`;
+        thumb.style.cursor = 'zoom-in';
+        thumb.onclick = ()=>openLightbox(it.src, `${c.name}：${it.label}`);
+      } else {
+        thumb.textContent = 'N/A';
+      }
+
+      const cap = document.createElement('div'); cap.className='album-caption'; cap.textContent = it.label;
+      card.appendChild(thumb); card.appendChild(cap); grid.appendChild(card);
+    });
+  });
+}
+
+/* ---------- Lightbox ---------- */
+function openLightbox(src, label){
+  const lb  = document.getElementById('lightbox');
+  const box = document.getElementById('lightboxMedia');
+  const cap = document.getElementById('lightboxCaption');
+  const isVideo = /\.(mp4|webm|ogg|mov|avi)$/i.test(src);
+  box.innerHTML = isVideo ? `<video src="${src}" controls autoplay muted></video>` : `<img src="${src}" alt="${label??''}">`;
+  cap.textContent = label || '';
+  lb.classList.add('show');
+  document.body.dataset.lbScroll = document.body.style.overflow || '';
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('keydown', onLightboxKey);
+}
+function closeLightbox(){
+  const lb  = document.getElementById('lightbox');
+  const box = document.getElementById('lightboxMedia');
+  const cap = document.getElementById('lightboxCaption');
+  lb.classList.remove('show'); box.innerHTML=''; cap.textContent='';
+  document.body.style.overflow = document.body.dataset.lbScroll || ''; delete document.body.dataset.lbScroll;
+  document.removeEventListener('keydown', onLightboxKey);
+}
+function onLightboxKey(e){ if(e.key==='Escape') closeLightbox(); }
+
+/* ---------- エネルギー・ログ・バフ絵文字 ---------- */
+function updateEnergy(){ document.querySelectorAll('.energy-orb').forEach((o,i)=>{ i<game.energy ? o.classList.add('filled') : o.classList.remove('filled'); }); }
+function updateLog(msg){ document.getElementById('battleLog').textContent = msg; }
+function updateBuffEmoji(){
+  const e = document.getElementById('buffEmoji');
+  const f = game.teamBuff.fire   ? '🔥' : '◻️';
+  const p = game.teamBuff.prism  ? '💎' : '◻️';
+  const s = game.teamBuff.shadow ? '🌙' : '◻️';
+  e.textContent = `${f}${p}${s}`;
+}
+
+/* ---------- ボタン有効/無効 ---------- */
+function enableActionButtons(){ ['attackBtn','skillBtn','guardBtn','dodgeBtn','specialSkillBtn','specialBtn'].forEach(id=>{const el=document.getElementById(id); if(el){el.disabled=false; el.style.opacity='1'; el.style.cursor='pointer';}}); }
+function disableActionButtons(){ ['attackBtn','skillBtn','guardBtn','dodgeBtn','specialSkillBtn','specialBtn'].forEach(id=>{const el=document.getElementById(id); if(el){el.disabled=true; el.style.opacity='.5'; el.style.cursor='not-allowed';}}); }
+</script>
+
+<script>
+  // 100vhが縮む問題対策：--vh を設定
+  function setVh() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  }
+  setVh();
+  window.addEventListener('resize', setVh);
+</script>
+
+</body>
+</html>
